@@ -19,3 +19,4 @@ ID=$(docker run -d $IMAGE /build/builder)
 docker attach $ID
 test $(docker wait $ID) -eq 0
 docker commit $ID $IMAGE > /dev/null
+docker rm $(docker ps -a -f 'status=exited' -q) > /dev/null
