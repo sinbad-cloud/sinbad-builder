@@ -20,3 +20,4 @@ docker attach $ID
 test $(docker wait $ID) -eq 0
 docker commit $ID $IMAGE > /dev/null
 docker rm $(docker ps -a -f 'status=exited' -q) > /dev/null
+docker rmi $(docker images -f 'dangling=true' -q) > /dev/null

@@ -83,10 +83,18 @@ func (r *ReBuild) run() {
 	tag := strings.Replace(string(output), "\n", "", -1)
 	log.WithFields(log.Fields{"commit": string(tag)}).Debug("Short commit hash")
 
-	log.Info(fmt.Sprintf("About to run %s in %s", r.BuildStep, dir))
-	output, err = session.Command(r.BuildStep, r.Repo, tag).Output()
-	if err != nil {
-		panic(err)
+	if _, err = os.Stat(path.Join(dir, "Dockerfile")); err == nil {
+		log.Info(fmt.Sprintf("Found Dockerfile, about to run docker build"))
+		output, err = session.Command("docker", "build", "-t", r.Repo+":"+tag, ".").Output()
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		log.Info(fmt.Sprintf("About to run %s in %s", r.BuildStep, dir))
+		output, err = session.Command(r.BuildStep, r.Repo, tag).Output()
+		if err != nil {
+			panic(err)
+		}
 	}
 	log.Debug("buildstep " + string(output))
 }
