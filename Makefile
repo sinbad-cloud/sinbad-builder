@@ -1,6 +1,7 @@
 VERSION_VAR := main.VERSION
 REPO_VERSION := $(shell git describe --always --dirty --tags)
 GOBUILD_VERSION_ARGS := -ldflags "-X $(VERSION_VAR)=$(REPO_VERSION)"
+GIT_HASH := $(shell git rev-parse --short HEAD)
 
 ARCH := linux darwin windows freebsd
 
@@ -30,11 +31,11 @@ watch:
 commit-hook:
 	cp dev/commit-hook.sh .git/hooks/pre-commit
 
-setup-cross:
-	go get -v -u github.com/laher/goxc
-
 cross:
-	goxc -n=rebuild -bc="$(ARCH)" -pv="${REPO_VERSION}" -d=cross
+	 CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o rebuild-linux .
+
+docker: cross
+	 docker build -t rebuild:$(GIT_HASH) .
 
 version:
 	@echo $(REPO_VERSION)
