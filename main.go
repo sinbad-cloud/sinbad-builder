@@ -55,19 +55,19 @@ func (r *ReBuild) addFlags(fs *pflag.FlagSet) {
 }
 
 func (r *ReBuild) run() {
-	repo := fmt.Sprintf("git@%s:%s/%s.git", r.Origin, r.Namespace, r.Repo)
-	dir, err := getDirectory(r.Dir, r.Namespace, r.Repo)
+	source := fmt.Sprintf("git@%s:%s/%s.git", r.Origin, r.Namespace, r.Repo)
+	dir, err := getDirectory(r)
 	if err != nil {
 		panic(err)
 	}
 
 	session := sh.NewSession()
 	if _, err = os.Stat(path.Join(dir, ".git")); err == nil {
-		if err = fetch(session, dir, repo); err != nil {
+		if err = fetch(session, dir, source); err != nil {
 			panic(err)
 		}
 	} else {
-		if err = clone(session, dir, repo); err != nil {
+		if err = clone(session, dir, source); err != nil {
 			panic(err)
 		}
 	}
@@ -96,18 +96,18 @@ func (r *ReBuild) run() {
 			panic(err)
 		}
 	}
-	log.Debug("buildstep " + string(output))
+	log.Info(string(output))
 }
 
-func getDirectory(dir, namespace, repo string) (string, error) {
-	if dir == "" {
+func getDirectory(r *ReBuild) (string, error) {
+	if r.Dir == "" {
 		return ioutil.TempDir(os.TempDir(), "rebuild")
 	}
-	return path.Join(dir, namespace, repo), nil
+	return path.Join(r.Dir, r.Origin, r.Namespace, r.Repo), nil
 }
 
-func fetch(s *sh.Session, dir, repo string) error {
-	log.WithFields(log.Fields{"repository": repo, "dir": dir}).Info("About to fetch from upstream")
+func fetch(s *sh.Session, dir, source string) error {
+	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to fetch from upstream")
 	if err := s.Call("git", "-C", dir, "fetch", "origin"); err != nil {
 		return err
 	}
@@ -117,10 +117,10 @@ func fetch(s *sh.Session, dir, repo string) error {
 	return nil
 }
 
-func clone(s *sh.Session, dir, repo string) error {
-	log.WithFields(log.Fields{"repository": repo, "dir": dir}).Info("About to clone repository")
+func clone(s *sh.Session, dir, source string) error {
+	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to clone repository")
 	// TODO: handle depth https://github.com/travis-ci/travis-build/blob/master/lib/travis/build/git/clone.rb#L40
-	if err := s.Call("git", "clone", repo, dir); err != nil {
+	if err := s.Call("git", "clone", source, dir); err != nil {
 		return err
 	}
 	return nil
