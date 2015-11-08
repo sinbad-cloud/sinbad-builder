@@ -57,47 +57,34 @@ func (r *ReBuild) addFlags(fs *pflag.FlagSet) {
 }
 
 func (r *ReBuild) run() {
-	source := fmt.Sprintf("git@%s:%s/%s.git", r.Origin, r.Namespace, r.Repo)
+	source := fmt.Sprintf("https://%s/%s/%s.git", r.Origin, r.Namespace, r.Repo)
 	dir, err := getDirectory(r)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	session := sh.NewSession()
-	if _, err = os.Stat(path.Join(dir, ".git")); err == nil {
-		if err = fetch(session, dir, source); err != nil {
-			panic(err)
-		}
-	} else {
-		if err = clone(session, dir, source); err != nil {
-			panic(err)
-		}
+	if err = fetchOrClone(session, dir, source); err != nil {
+		log.Panic(err)
 	}
 	session.SetDir(dir)
-	if err = session.Call("git", "checkout", "-qf", r.Commit); err != nil {
-		panic(err)
+	if err = checkout(session, r.Commit); err != nil {
+		log.Panic(err)
 	}
 
-	output, err := session.Command("git", "rev-parse", "--short", "HEAD").Output()
+	tag, err := shortHash(session)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
-	tag := strings.Replace(string(output), "\n", "", -1)
-	log.WithFields(log.Fields{"commit": string(tag)}).Debug("Short commit hash")
-
 	image := fmt.Sprintf("%s/%s:%s", r.Registry, r.Repo, tag)
-	output, err = build(session, dir, image, r.BuildStep)
-	if err != nil {
-		panic(err)
+
+	if _, err = build(session, dir, image, r.BuildStep); err != nil {
+		log.Panic(err)
 	}
 
-	log.Info(string(output))
-	log.WithFields(log.Fields{"image": image}).Info("About to push to docker registry")
-	output, err = session.Command("docker", "push", image).Output()
-	if err != nil {
-		panic(err)
+	if _, err = push(session, image); err != nil {
+		log.Panic(err)
 	}
-	log.Info(string(output))
 }
 
 func getDirectory(r *ReBuild) (string, error) {
@@ -107,24 +94,40 @@ func getDirectory(r *ReBuild) (string, error) {
 	return path.Join(r.Dir, r.Origin, r.Namespace, r.Repo), nil
 }
 
+func fetchOrClone(s *sh.Session, dir, source string) error {
+	if _, err := os.Stat(path.Join(dir, ".git")); err == nil {
+		return fetch(s, dir, source)
+	} else {
+		return clone(s, dir, source)
+	}
+}
+
 func fetch(s *sh.Session, dir, source string) error {
 	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to fetch from upstream")
 	if err := s.Call("git", "-C", dir, "fetch", "origin"); err != nil {
 		return err
 	}
-	if err := s.Call("git", "-C", dir, "reset", "--hard"); err != nil {
-		return err
-	}
-	return nil
+	return s.Call("git", "-C", dir, "reset", "--hard")
 }
 
 func clone(s *sh.Session, dir, source string) error {
 	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to clone repository")
 	// TODO: handle depth https://github.com/travis-ci/travis-build/blob/master/lib/travis/build/git/clone.rb#L40
-	if err := s.Call("git", "clone", source, dir); err != nil {
-		return err
+	return s.Call("git", "clone", source, dir)
+}
+
+func checkout(s *sh.Session, commit string) error {
+	return s.Call("git", "checkout", "-qf", commit)
+}
+
+func shortHash(s *sh.Session) (string, error) {
+	output, err := s.Command("git", "rev-parse", "--short", "HEAD").Output()
+	if err != nil {
+		return "", err
 	}
-	return nil
+	tag := strings.Replace(string(output), "\n", "", -1)
+	log.WithFields(log.Fields{"commit": string(tag)}).Debug("Short commit hash")
+	return tag, nil
 }
 
 func build(s *sh.Session, dir, image, buildStep string) (output []byte, err error) {
@@ -135,5 +138,16 @@ func build(s *sh.Session, dir, image, buildStep string) (output []byte, err erro
 		log.WithFields(log.Fields{"image": image}).Info(fmt.Sprintf("About to run %s in %s", buildStep, dir))
 		output, err = s.Command(buildStep, image).Output()
 	}
-	return output, err
+	log.Info(string(output))
+	return
+}
+
+func push(s *sh.Session, image string) (output []byte, err error) {
+	log.WithFields(log.Fields{"image": image}).Info("About to push to docker registry")
+	output, err = s.Command("docker", "push", image).Output()
+	if err != nil {
+		return
+	}
+	log.Info(string(output))
+	return
 }
