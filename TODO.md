@@ -2,4 +2,5 @@
 
 ## Pri 1
 
-* docker push
+* Validate required params
+* Use auth token to authenticate?

@@ -26,6 +26,7 @@ type ReBuild struct {
 	Origin    string
 	Dir       string
 	Repo      string
+	Registry  string
 	Timestamp time.Time
 	Type      string
 	Verbose   bool
@@ -51,6 +52,7 @@ func (r *ReBuild) addFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&r.Namespace, "namespace", r.Namespace, "Namespace")
 	fs.StringVar(&r.Origin, "origin", r.Origin, "Origin e.g. github.com")
 	fs.StringVar(&r.Repo, "repo", r.Repo, "Git repository")
+	fs.StringVar(&r.Registry, "registry", r.Registry, "Docker registry e.g. [domain/][namespace]")
 	fs.BoolVar(&r.Verbose, "verbose", false, "Verbose")
 }
 
@@ -83,18 +85,17 @@ func (r *ReBuild) run() {
 	tag := strings.Replace(string(output), "\n", "", -1)
 	log.WithFields(log.Fields{"commit": string(tag)}).Debug("Short commit hash")
 
-	if _, err = os.Stat(path.Join(dir, "Dockerfile")); err == nil {
-		log.Info(fmt.Sprintf("Found Dockerfile, about to run docker build"))
-		output, err = session.Command("docker", "build", "-t", r.Repo+":"+tag, ".").Output()
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		log.Info(fmt.Sprintf("About to run %s in %s", r.BuildStep, dir))
-		output, err = session.Command(r.BuildStep, r.Repo, tag).Output()
-		if err != nil {
-			panic(err)
-		}
+	image := fmt.Sprintf("%s/%s:%s", r.Registry, r.Repo, tag)
+	output, err = build(session, dir, image, r.BuildStep)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Info(string(output))
+	log.WithFields(log.Fields{"image": image}).Info("About to push to docker registry")
+	output, err = session.Command("docker", "push", image).Output()
+	if err != nil {
+		panic(err)
 	}
 	log.Info(string(output))
 }
@@ -124,4 +125,15 @@ func clone(s *sh.Session, dir, source string) error {
 		return err
 	}
 	return nil
+}
+
+func build(s *sh.Session, dir, image, buildStep string) (output []byte, err error) {
+	if _, err = os.Stat(path.Join(dir, "Dockerfile")); err == nil {
+		log.WithFields(log.Fields{"image": image}).Info(fmt.Sprintf("Found Dockerfile, about to run docker build"))
+		output, err = s.Command("docker", "build", "-t", image, ".").Output()
+	} else {
+		log.WithFields(log.Fields{"image": image}).Info(fmt.Sprintf("About to run %s in %s", buildStep, dir))
+		output, err = s.Command(buildStep, image).Output()
+	}
+	return output, err
 }
