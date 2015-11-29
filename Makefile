@@ -14,7 +14,7 @@ setup:
 build: *.go
 	gofmt -w=true .
 	goimports -w=true .
-	go build -o rebuild -x $(GOBUILD_VERSION_ARGS) bitbucket.org/jtblin/rebuild
+	go build -o build/bin/rebuild -x $(GOBUILD_VERSION_ARGS) bitbucket.org/jtblin/rebuild
 
 test: build
 	go test
@@ -33,10 +33,10 @@ commit-hook:
 	cp dev/commit-hook.sh .git/hooks/pre-commit
 
 cross:
-	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o rebuild-linux .
+	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o build/bin/rebuild-linux .
 
 docker: cross
-	docker build -t jtblin/rebuild:$(GIT_HASH) .
+	cd build && docker build -t jtblin/rebuild:$(GIT_HASH) .
 
 release:
 	docker push jtblin/rebuild:$(GIT_HASH)
@@ -47,7 +47,7 @@ version:
 	@echo $(REPO_VERSION)
 
 clean:
-	docker rm $(docker ps -a -f 'status=exited' -q)
-	docker rmi $(docker images -f 'dangling=true' -q)
+	-docker rm $(docker ps -a -f 'status=exited' -q)
+	-docker rmi $(docker images -f 'dangling=true' -q)
 
 .PHONY: build

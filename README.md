@@ -10,7 +10,7 @@ Start an app
 
 Run locally (OSX)
 
-    ./rebuild --namespace=jtblin --repo=node-hello --origin=github.com --verbose \
+    ./build/bin/rebuild --namespace=jtblin --repo=node-hello --origin=github.com --verbose \
     	--build-step=`pwd`/include/buildstep.sh --dir=/Users/jtblin/.tmp-scripts \
     	 --commit=9a9b307cc0f4dbc461b457719f8ac854f2ca3666 --registry=jtblin --docker-machine
 
