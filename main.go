@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -10,26 +11,26 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	//	"github.com/progrium/go-basher"
-	//	"github.com/fsouza/go-dockerclient"
 	"github.com/codeskyblue/go-sh"
+	"github.com/fsouza/go-dockerclient"
 	"github.com/spf13/pflag"
 )
 
 // ReBuild encapsulates all of the parameters necessary for starting up
 // a builder. These can either be set via command line or directly.
 type ReBuild struct {
-	Author    string
-	BuildStep string
-	Commit    string
-	Namespace string
-	Origin    string
-	Dir       string
-	Repo      string
-	Registry  string
-	Timestamp time.Time
-	Type      string
-	Verbose   bool
+	Author        string
+	BuildStep     string
+	Commit        string
+	Namespace     string
+	Origin        string
+	Dir           string
+	DockerMachine bool
+	Repo          string
+	Registry      string
+	Timestamp     time.Time
+	Type          string
+	Verbose       bool
 }
 
 func main() {
@@ -41,7 +42,6 @@ func main() {
 	if r.Verbose {
 		log.SetLevel(log.DebugLevel)
 	}
-
 	r.run()
 }
 
@@ -49,6 +49,7 @@ func (r *ReBuild) addFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&r.BuildStep, "build-step", r.BuildStep, "Location of buildstep file")
 	fs.StringVar(&r.Commit, "commit", r.Commit, "Commit to checkout")
 	fs.StringVar(&r.Dir, "dir", r.Dir, "Directory to clone repositories")
+	fs.BoolVar(&r.DockerMachine, "docker-machine", r.DockerMachine, "Flag to use docker-machine client")
 	fs.StringVar(&r.Namespace, "namespace", r.Namespace, "Namespace")
 	fs.StringVar(&r.Origin, "origin", r.Origin, "Origin e.g. github.com")
 	fs.StringVar(&r.Repo, "repo", r.Repo, "Git repository")
@@ -78,11 +79,29 @@ func (r *ReBuild) run() {
 	}
 	image := fmt.Sprintf("%s/%s:%s", r.Registry, r.Repo, tag)
 
-	if _, err = build(session, dir, image, r.BuildStep); err != nil {
+	var client *docker.Client
+	if r.DockerMachine {
+		client, err = docker.NewClientFromEnv()
+	} else {
+		client, err = docker.NewClient("unix:///var/run/docker.sock")
+	}
+	if err != nil {
 		log.Panic(err)
 	}
 
-	if _, err = push(session, image); err != nil {
+	w := log.StandardLogger().Writer()
+	defer w.Close()
+
+	if err = build(dir, image, client, w); err != nil {
+		log.Panic(err)
+	}
+
+	authConfigs, err := docker.NewAuthConfigurationsFromDockerCfg()
+	if err != nil {
+		log.Panic(err)
+	}
+	log.Debugf("Docker auth configurations: %+v", authConfigs)
+	if err = push(image, client, authConfigs.Configs["https://index.docker.io/v1/"], w); err != nil {
 		log.Panic(err)
 	}
 }
@@ -97,9 +116,8 @@ func getDirectory(r *ReBuild) (string, error) {
 func fetchOrClone(s *sh.Session, dir, source string) error {
 	if _, err := os.Stat(path.Join(dir, ".git")); err == nil {
 		return fetch(s, dir, source)
-	} else {
-		return clone(s, dir, source)
 	}
+	return clone(s, dir, source)
 }
 
 func fetch(s *sh.Session, dir, source string) error {
@@ -130,24 +148,47 @@ func shortHash(s *sh.Session) (string, error) {
 	return tag, nil
 }
 
-func build(s *sh.Session, dir, image, buildStep string) (output []byte, err error) {
-	if _, err = os.Stat(path.Join(dir, "Dockerfile")); err == nil {
-		log.WithFields(log.Fields{"image": image}).Info(fmt.Sprintf("Found Dockerfile, about to run docker build"))
-		output, err = s.Command("docker", "build", "-t", image, ".").Output()
-	} else {
-		log.WithFields(log.Fields{"image": image}).Info(fmt.Sprintf("About to run %s in %s", buildStep, dir))
-		output, err = s.Command(buildStep, image).Output()
+func build(src, name string, client *docker.Client, out io.Writer) error {
+	dockerfile := path.Join(src, "Dockerfile")
+	var exist bool
+
+	options := docker.BuildImageOptions{
+		Name:         name,
+		ContextDir:   src,
+		OutputStream: out,
 	}
-	log.Info(string(output))
-	return
+
+	if _, err := os.Stat(dockerfile); err == nil {
+		exist = true
+		log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("Found existing Dockerfile"))
+	} else {
+		log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("Dockerfile not found, generating"))
+		content := `FROM progrium/buildstep
+ADD . /app
+RUN /build/builder
+CMD ["/bin/bash", "-c", "'/start web'"]`
+		if err := ioutil.WriteFile(dockerfile, []byte(content), 0644); err != nil {
+			return err
+		}
+	}
+	log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("About to run docker build"))
+	if err := client.BuildImage(options); err != nil {
+		return err
+	}
+	if !exist {
+		if err := os.Remove(dockerfile); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func push(s *sh.Session, image string) (output []byte, err error) {
-	log.WithFields(log.Fields{"image": image}).Info("About to push to docker registry")
-	output, err = s.Command("docker", "push", image).Output()
-	if err != nil {
-		return
+func push(name string, client *docker.Client, auth docker.AuthConfiguration, out io.Writer) error {
+	log.WithFields(log.Fields{"image": name}).Info("About to push to docker registry")
+	repository, tag := docker.ParseRepositoryTag(name)
+	options := docker.PushImageOptions{Name: repository, Tag: tag, OutputStream: out}
+	if err := client.PushImage(options, auth); err != nil {
+		return err
 	}
-	log.Info(string(output))
-	return
+	return nil
 }

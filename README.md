@@ -8,11 +8,11 @@ Start an app
 
     docker run -it node-hello /start web
 
-Run locally
+Run locally (OSX)
 
     ./rebuild --namespace=jtblin --repo=node-hello --origin=github.com --verbose \
-    	--build-step=`pwd`/include/buildstep.sh --dir=/Users/jtblin/.tmp-scripts\
-    	 --commit=9a9b307cc0f4dbc461b457719f8ac854f2ca3666 --registry=jtblin
+    	--build-step=`pwd`/include/buildstep.sh --dir=/Users/jtblin/.tmp-scripts \
+    	 --commit=9a9b307cc0f4dbc461b457719f8ac854f2ca3666 --registry=jtblin --docker-machine
 
 Run inside a docker container
 
@@ -21,3 +21,10 @@ Run inside a docker container
     	-v /Users/jtblin/.docker/config.json:/root/.docker/config.json -v $(which docker):/bin/docker rebuild:f9802da \
     	--namespace=jtblin --repo=node-hello --origin=github.com --verbose --build-step=/include/buildstep.sh \
     	--commit=9a9b307cc0f4dbc461b457719f8ac854f2ca3666 --registry=jtblin --dir=/src
+
+## Repos for testing
+
+* Dockerfile: https://github.com/enokd/docker-node-hello/
+* Dockerfile: https://github.com/shekhargulati/python-flask-docker-hello-world
+* Node: https://github.com/jtblin/node-hello
+* Python: https://github.com/IBM-Bluemix/python-hello-world-flask
