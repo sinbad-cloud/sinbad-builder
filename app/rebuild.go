@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -78,10 +77,7 @@ func (r *ReBuild) Run() error {
 		return err
 	}
 
-	w := log.StandardLogger().Writer()
-	defer w.Close()
-
-	if err = build(dir, image, client, w); err != nil {
+	if err = build(dir, image, client); err != nil {
 		return err
 	}
 
@@ -89,7 +85,7 @@ func (r *ReBuild) Run() error {
 	if err != nil {
 		return err
 	}
-	if err = push(image, client, authConfigs.Configs["https://index.docker.io/v1/"], w); err != nil {
+	if err = push(image, client, authConfigs.Configs["https://index.docker.io/v1/"]); err != nil {
 		return err
 	}
 	return nil
@@ -137,14 +133,17 @@ func shortHash(s *sh.Session) (string, error) {
 	return tag, nil
 }
 
-func build(src, name string, client *docker.Client, out io.Writer) error {
+func build(src, name string, client *docker.Client) error {
 	dockerfile := path.Join(src, "Dockerfile")
 	var exist bool
+
+	w := log.StandardLogger().Writer()
+	defer w.Close()
 
 	options := docker.BuildImageOptions{
 		Name:         name,
 		ContextDir:   src,
-		OutputStream: out,
+		OutputStream: w,
 	}
 
 	if _, err := os.Stat(dockerfile); err == nil {
@@ -152,9 +151,9 @@ func build(src, name string, client *docker.Client, out io.Writer) error {
 		log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("Found existing Dockerfile"))
 	} else {
 		log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("Dockerfile not found, generating"))
-		content := `FROM progrium/buildstep
+		content := `FROM jtblin/herokuish:0.3.5
 ADD . /app
-RUN /build/builder
+RUN /bin/herokuish buildpack build
 CMD ["/bin/bash", "-c", "'/start web'"]`
 		if err := ioutil.WriteFile(dockerfile, []byte(content), 0644); err != nil {
 			return err
@@ -172,10 +171,13 @@ CMD ["/bin/bash", "-c", "'/start web'"]`
 	return nil
 }
 
-func push(name string, client *docker.Client, auth docker.AuthConfiguration, out io.Writer) error {
+func push(name string, client *docker.Client, auth docker.AuthConfiguration) error {
+	w := log.StandardLogger().Writer()
+	defer w.Close()
+
 	log.WithFields(log.Fields{"image": name}).Info("About to push to docker registry")
 	repository, tag := docker.ParseRepositoryTag(name)
-	options := docker.PushImageOptions{Name: repository, Tag: tag, OutputStream: out}
+	options := docker.PushImageOptions{Name: repository, Tag: tag, OutputStream: w}
 	if err := client.PushImage(options, auth); err != nil {
 		return err
 	}

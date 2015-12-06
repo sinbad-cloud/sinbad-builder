@@ -50,4 +50,7 @@ clean:
 	-docker rm $(docker ps -a -f 'status=exited' -q)
 	-docker rmi $(docker images -f 'dangling=true' -q)
 
+herokuish:
+	cd build && docker build -t jtblin/herokuish:0.3.5 -f Dockerfile.herokuish .
+
 .PHONY: build
