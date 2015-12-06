@@ -3,7 +3,7 @@ package main
 import (
 	"runtime"
 
-	"bitbucket.org/jtblin/rebuild/app"
+	"bitbucket.org/jtblin/kigo-builder/app"
 	log "github.com/Sirupsen/logrus"
 	"github.com/spf13/pflag"
 )

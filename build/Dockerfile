@@ -4,6 +4,6 @@ RUN apk --update add \
 	git \
 	ca-certificates \
 	&& rm -rf /var/cache/apk/*
-ADD bin/rebuild-linux /bin/rebuild
+ADD bin/kigo-builder-linux /bin/kigo-builder
 
-ENTRYPOINT ["rebuild"]
+ENTRYPOINT ["kigo-builder"]

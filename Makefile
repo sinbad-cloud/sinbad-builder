@@ -14,7 +14,7 @@ setup:
 build: *.go
 	gofmt -w=true .
 	goimports -w=true .
-	go build -o build/bin/rebuild -x $(GOBUILD_VERSION_ARGS) bitbucket.org/jtblin/rebuild
+	go build -o build/bin/kigo-builder -x $(GOBUILD_VERSION_ARGS) bitbucket.org/jtblin/kigo-builder
 
 test: build
 	go test
@@ -33,15 +33,15 @@ commit-hook:
 	cp dev/commit-hook.sh .git/hooks/pre-commit
 
 cross:
-	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o build/bin/rebuild-linux .
+	CGO_ENABLED=0 GOOS=linux go build -ldflags "-s" -a -installsuffix cgo -o build/bin/kigo-builder-linux .
 
 docker: cross
-	cd build && docker build -t jtblin/rebuild:$(GIT_HASH) .
+	cd build && docker build -t jtblin/kigo-builder:$(GIT_HASH) .
 
 release:
-	docker push jtblin/rebuild:$(GIT_HASH)
-	docker tag -f jtblin/rebuild:$(GIT_HASH) jtblin/rebuild:latest
-	docker push jtblin/rebuild:latest
+	docker push jtblin/kigo-builder:$(GIT_HASH)
+	docker tag -f jtblin/kigo-builder:$(GIT_HASH) jtblin/kigo-builder:latest
+	docker push jtblin/kigo-builder:latest
 
 version:
 	@echo $(REPO_VERSION)
