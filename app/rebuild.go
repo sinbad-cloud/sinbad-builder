@@ -159,15 +159,18 @@ CMD ["/bin/bash", "-c", "'/start web'"]`
 			return err
 		}
 	}
+	if !exist {
+		defer func() {
+			if err := os.Remove(dockerfile); err != nil {
+				log.Errorf("Error removing Dockerfile: %+v", err)
+			}
+		}()
+	}
 	log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("About to run docker build"))
 	if err := client.BuildImage(options); err != nil {
 		return err
 	}
-	if !exist {
-		if err := os.Remove(dockerfile); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
 
