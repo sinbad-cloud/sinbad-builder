@@ -18,8 +18,6 @@ import (
 // a builder. These can either be set via command line or directly.
 type ReBuild struct {
 	Author        string
-	BuildStep     string
-	Commit        string
 	Namespace     string
 	Origin        string
 	Dir           string
@@ -33,9 +31,7 @@ type ReBuild struct {
 
 // AddFlags adds flags for a specific ReBuild to the specified FlagSet
 func (r *ReBuild) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.BuildStep, "build-step", r.BuildStep, "Location of buildstep file")
-	fs.StringVar(&r.Commit, "commit", r.Commit, "Commit to checkout")
-	fs.StringVar(&r.Dir, "dir", r.Dir, "Directory to clone repositories")
+	fs.StringVar(&r.Dir, "dir", r.Dir, "Path of git repository")
 	fs.BoolVar(&r.DockerMachine, "docker-machine", r.DockerMachine, "Flag to use docker-machine client")
 	fs.StringVar(&r.Namespace, "namespace", r.Namespace, "Namespace")
 	fs.StringVar(&r.Origin, "origin", r.Origin, "Origin e.g. github.com")
@@ -46,20 +42,10 @@ func (r *ReBuild) AddFlags(fs *pflag.FlagSet) {
 
 // Run runs the job
 func (r *ReBuild) Run() error {
-	source := fmt.Sprintf("https://%s/%s/%s.git", r.Origin, r.Namespace, r.Repo)
-	dir, err := getDirectory(r)
-	if err != nil {
-		return err
-	}
-
+	// kubernetes clone the repo at the root of the volume so need to cd to the repo directory
+	dir := path.Join(r.Dir, r.Repo)
 	session := sh.NewSession()
-	if err = fetchOrClone(session, dir, source); err != nil {
-		return err
-	}
 	session.SetDir(dir)
-	if err = checkout(session, r.Commit); err != nil {
-		return err
-	}
 
 	tag, err := shortHash(session)
 	if err != nil {
@@ -89,38 +75,6 @@ func (r *ReBuild) Run() error {
 		return err
 	}
 	return nil
-}
-
-func getDirectory(r *ReBuild) (string, error) {
-	if r.Dir == "" {
-		return ioutil.TempDir(os.TempDir(), "rebuild")
-	}
-	return path.Join(r.Dir, r.Origin, r.Namespace, r.Repo), nil
-}
-
-func fetchOrClone(s *sh.Session, dir, source string) error {
-	if _, err := os.Stat(path.Join(dir, ".git")); err == nil {
-		return fetch(s, dir, source)
-	}
-	return clone(s, dir, source)
-}
-
-func fetch(s *sh.Session, dir, source string) error {
-	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to fetch from upstream")
-	if err := s.Call("git", "-C", dir, "fetch", "origin"); err != nil {
-		return err
-	}
-	return s.Call("git", "-C", dir, "reset", "--hard")
-}
-
-func clone(s *sh.Session, dir, source string) error {
-	log.WithFields(log.Fields{"source": source, "dir": dir}).Info("About to clone repository")
-	// TODO: handle depth https://github.com/travis-ci/travis-build/blob/master/lib/travis/build/git/clone.rb#L40
-	return s.Call("git", "clone", source, dir)
-}
-
-func checkout(s *sh.Session, commit string) error {
-	return s.Call("git", "checkout", "-qf", commit)
 }
 
 func shortHash(s *sh.Session) (string, error) {

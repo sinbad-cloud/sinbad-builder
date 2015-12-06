@@ -8,8 +8,6 @@
 
 * Smaller base images
 * Validate required params
-* Use auth token to authenticate with git?
-* Stream git stdout
 
 ## Pri 3
 
