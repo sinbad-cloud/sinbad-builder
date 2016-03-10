@@ -38,7 +38,7 @@ cross:
 docker: cross
 	cd build && docker build -t jtblin/kigo-builder:$(GIT_HASH) .
 
-release:
+release: docker
 	docker push jtblin/kigo-builder:$(GIT_HASH)
 	docker tag -f jtblin/kigo-builder:$(GIT_HASH) jtblin/kigo-builder:latest
 	docker push jtblin/kigo-builder:latest

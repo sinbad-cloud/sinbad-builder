@@ -12,6 +12,7 @@ import (
 	"github.com/codeskyblue/go-sh"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/spf13/pflag"
+	kutil "k8s.io/kubernetes/pkg/util"
 )
 
 // ReBuild encapsulates all of the parameters necessary for starting up
@@ -72,6 +73,26 @@ func (r *ReBuild) Run() error {
 		return err
 	}
 	if err = push(image, client, authConfigs.Configs["https://index.docker.io/v1/"]); err != nil {
+		return err
+	}
+	// TODO: use different service
+	deployer, err := NewDeployer("", "", false)
+	if err != nil {
+		return err
+	}
+	envVars := make(map[string]string)
+	envVars["PORT"] = "8080"
+	response, err := deployer.Run(&DeployRequest{
+		ContainerPort: kutil.NewIntOrStringFromInt(8080), // FIXME: hardcoding
+		Environment: "default", // FIXME: hardcoding
+		EnvVars: envVars,
+		Image: image,
+		Replicas: 1,
+		ServiceID: r.Repo,
+		Zone: "atlassianapp.cloud", // FIXME: hardcoding
+	})
+	log.WithField("deploymentResponse", response)
+	if err != nil {
 		return err
 	}
 	return nil
