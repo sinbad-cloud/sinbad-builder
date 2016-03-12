@@ -1,4 +1,4 @@
-package app
+package cmd
 
 import (
 	log "github.com/Sirupsen/logrus"
@@ -29,17 +29,17 @@ type Deployer struct {
 
 // DeployRequest represents the request payload
 type DeployRequest struct {
-	Args          []string         `json:"arguments"`
-	ContainerPort util.IntOrString `json:"containerPort"`
-	Environment   string           `json:"environment"`
-	EnvVars   map[string]string           `json:"envVars"`
+	Args          []string          `json:"arguments"`
+	ContainerPort util.IntOrString  `json:"containerPort"`
+	Environment   string            `json:"environment"`
+	EnvVars       map[string]string `json:"envVars"`
 	Heartbeat     struct {
-			      Path                         string           `json:"path"`
-			      Port                         util.IntOrString `json:"port"`
-			      InitialDelayLivenessSeconds  int64            `json:"initialDelayLivenessSeconds"`
-			      InitialDelayReadinessSeconds int64            `json:"initialDelayReadinessSeconds"`
-			      TimeoutSeconds               int64            `json:"timeoutSeconds"`
-		      } `json:"heartbeat"`
+		Path                         string           `json:"path"`
+		Port                         util.IntOrString `json:"port"`
+		InitialDelayLivenessSeconds  int64            `json:"initialDelayLivenessSeconds"`
+		InitialDelayReadinessSeconds int64            `json:"initialDelayReadinessSeconds"`
+		TimeoutSeconds               int64            `json:"timeoutSeconds"`
+	} `json:"heartbeat"`
 	Image     string `json:"image"`
 	Replicas  int    `json:"replicas"`
 	ServiceID string `json:"serviceId"`
@@ -212,6 +212,7 @@ func newMetadata(payload *DeployRequest) api.ObjectMeta {
 func (r *Deployer) CreateOrUpdateDeployment(d *extensions.Deployment, env string) (*extensions.Deployment, error) {
 	log.WithFields(log.Fields{"d": d, "image": d.Spec.Template.Spec.Containers[0].Image}).Debug("New deployment")
 
+	// TODO: retrieve old deployment
 	newD, err := r.Client.Deployments(env).Create(d)
 	if err != nil {
 		log.Debugf("Error: %s", err.Error())
@@ -227,10 +228,15 @@ func (r *Deployer) CreateOrUpdateDeployment(d *extensions.Deployment, env string
 
 	}
 	log.Debugf("Deployment created: %+v", d)
+	log.Info("Deployment created")
 	return newD, nil
 }
 
 func newDeployment(payload *DeployRequest) *extensions.Deployment {
+	envVars := []api.EnvVar{}
+	for k, v := range payload.EnvVars {
+		envVars = append(envVars, api.EnvVar{Name: k, Value: v})
+	}
 	return &extensions.Deployment{
 		ObjectMeta: newMetadata(payload),
 		Spec: extensions.DeploymentSpec{
@@ -249,7 +255,7 @@ func newDeployment(payload *DeployRequest) *extensions.Deployment {
 				Spec: api.PodSpec{
 					// TODO: disable ServiceAccountName
 					Containers: []api.Container{
-						api.Container{
+						{
 							Args:  payload.Args,
 							Name:  payload.ServiceID,
 							Image: payload.Image,
@@ -257,6 +263,7 @@ func newDeployment(payload *DeployRequest) *extensions.Deployment {
 								Name:          "http",
 								ContainerPort: payload.ContainerPort.IntVal,
 							}},
+							Env: envVars,
 							//LivenessProbe: newProbe(payload, payload.Heartbeat.InitialDelayLivenessSeconds),
 							//// FIXME: payload.Heartbeat.InitialDelayReadinessSeconds does not work as expected
 							//// makes instances fail health check if set to micros 1200s default value

@@ -1,4 +1,4 @@
-package app
+package cmd
 
 import (
 	"fmt"
@@ -15,36 +15,48 @@ import (
 	kutil "k8s.io/kubernetes/pkg/util"
 )
 
-// ReBuild encapsulates all of the parameters necessary for starting up
+// Builder encapsulates all of the parameters necessary for starting up
 // a builder. These can either be set via command line or directly.
-type ReBuild struct {
+type Builder struct {
 	Author        string
+	DockerMachine bool
+	Dir           string
 	Namespace     string
 	Origin        string
-	Dir           string
-	DockerMachine bool
-	Repo          string
 	Registry      string
+	Repo          string
 	Timestamp     time.Time
 	Type          string
 	Verbose       bool
+	Version       bool
+}
+
+// NewBuilder encapsulates all of the parameters necessary for starting up
+// the build job. These can either be set via command line or directly.
+func NewBuilder() *Builder {
+	return &Builder{}
 }
 
 // AddFlags adds flags for a specific ReBuild to the specified FlagSet
-func (r *ReBuild) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&r.Dir, "dir", r.Dir, "Path of git repository")
-	fs.BoolVar(&r.DockerMachine, "docker-machine", r.DockerMachine, "Flag to use docker-machine client")
-	fs.StringVar(&r.Namespace, "namespace", r.Namespace, "Namespace")
-	fs.StringVar(&r.Origin, "origin", r.Origin, "Origin e.g. github.com")
-	fs.StringVar(&r.Repo, "repo", r.Repo, "Git repository")
-	fs.StringVar(&r.Registry, "registry", r.Registry, "Docker registry e.g. [domain/][namespace]")
-	fs.BoolVar(&r.Verbose, "verbose", false, "Verbose")
+func (b *Builder) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&b.Dir, "dir", b.Dir, "Path of git repository")
+	fs.BoolVar(&b.DockerMachine, "docker-machine", b.DockerMachine, "Flag to use docker-machine client")
+	fs.StringVar(&b.Namespace, "namespace", b.Namespace, "Namespace")
+	fs.StringVar(&b.Origin, "origin", b.Origin, "Origin e.g. github.com")
+	fs.StringVar(&b.Repo, "repo", b.Repo, "Git repository")
+	fs.StringVar(&b.Registry, "registry", b.Registry, "Docker registry e.g. [domain/][namespace]")
+	fs.BoolVar(&b.Verbose, "verbose", false, "Verbose")
+	fs.BoolVar(&b.Version, "version", false, "Print the version and exits")
 }
 
 // Run runs the job
-func (r *ReBuild) Run() error {
+func (b *Builder) Run() error {
+	if b.Verbose {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	// kubernetes clone the repo at the root of the volume so need to cd to the repo directory
-	dir := path.Join(r.Dir, r.Repo)
+	dir := path.Join(b.Dir, b.Repo)
 	session := sh.NewSession()
 	session.SetDir(dir)
 
@@ -52,10 +64,10 @@ func (r *ReBuild) Run() error {
 	if err != nil {
 		return err
 	}
-	image := fmt.Sprintf("%s/%s:%s", r.Registry, r.Repo, tag)
+	image := fmt.Sprintf("%s/%s:%s", b.Registry, b.Repo, tag)
 
 	var client *docker.Client
-	if r.DockerMachine {
+	if b.DockerMachine {
 		client, err = docker.NewClientFromEnv()
 	} else {
 		client, err = docker.NewClient("unix:///var/run/docker.sock")
@@ -72,10 +84,10 @@ func (r *ReBuild) Run() error {
 	if err != nil {
 		return err
 	}
-	if err = push(image, client, authConfigs.Configs["https://index.docker.io/v1/"]); err != nil {
+	if err = push(image, client, authConfigs.Configs["docker.atlassian.io"]); err != nil {
 		return err
 	}
-	// TODO: use different service
+	// TODO: create a job and use different service to deploy
 	deployer, err := NewDeployer("", "", false)
 	if err != nil {
 		return err
@@ -84,12 +96,12 @@ func (r *ReBuild) Run() error {
 	envVars["PORT"] = "8080"
 	response, err := deployer.Run(&DeployRequest{
 		ContainerPort: kutil.NewIntOrStringFromInt(8080), // FIXME: hardcoding
-		Environment: "default", // FIXME: hardcoding
-		EnvVars: envVars,
-		Image: image,
-		Replicas: 1,
-		ServiceID: r.Repo,
-		Zone: "atlassianapp.cloud", // FIXME: hardcoding
+		Environment:   "default",                         // FIXME: hardcoding
+		EnvVars:       envVars,
+		Image:         image,
+		Replicas:      1,
+		ServiceID:     b.Repo,
+		Zone:          "connectapp.cloud", // FIXME: hardcoding
 	})
 	log.WithField("deploymentResponse", response)
 	if err != nil {
@@ -104,7 +116,7 @@ func shortHash(s *sh.Session) (string, error) {
 		return "", err
 	}
 	tag := strings.Replace(string(output), "\n", "", -1)
-	log.WithFields(log.Fields{"commit": string(tag)}).Debug("Short commit hash")
+	log.WithField("commit", tag).Debug("Short commit hash")
 	return tag, nil
 }
 
