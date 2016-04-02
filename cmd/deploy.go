@@ -106,7 +106,7 @@ func (d *Deployer) Run(payload *DeployRequest) (*DeployResponse, error) {
 	}
 
 	// get deployment status
-	r, err := labels.NewRequirement("name", labels.ExistsOperator, sets.NewString(payload.ServiceID))
+	r, err := labels.NewRequirement("name", labels.EqualsOperator, sets.NewString(payload.ServiceID))
 	if err != nil {
 		return res, err
 	}
