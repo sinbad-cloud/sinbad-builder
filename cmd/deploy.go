@@ -219,12 +219,10 @@ func newMetadata(payload *DeployRequest) api.ObjectMeta {
 
 // CreateOrUpdateDeployment creates or updates a service
 func (r *Deployer) CreateOrUpdateDeployment(d *extensions.Deployment, env string) (*extensions.Deployment, error) {
-	log.WithFields(log.Fields{"d": d, "image": d.Spec.Template.Spec.Containers[0].Image}).Debug("New deployment")
+	log.WithField("image", d.Spec.Template.Spec.Containers[0].Image).Debug("New deployment")
 
-	// TODO: retrieve old deployment
 	newD, err := r.Client.Deployments(env).Create(d)
 	if err != nil {
-		log.Debugf("Error: %s", err.Error())
 		if !apierrs.IsAlreadyExists(err) {
 			return nil, err
 		}
@@ -232,12 +230,11 @@ func (r *Deployer) CreateOrUpdateDeployment(d *extensions.Deployment, env string
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("Deployment updated: %+v", d)
+		log.Infof("Deployment updated: %+v", d)
 		return d, nil
 
 	}
-	log.Debugf("Deployment created: %+v", d)
-	log.Info("Deployment created")
+	log.Infof("Deployment created: %+v", d)
 	return newD, nil
 }
 
@@ -309,7 +306,6 @@ func newProbe(payload *DeployRequest, delay int) *api.Probe {
 func (r *Deployer) CreateOrUpdateIngress(ingress *extensions.Ingress, env string) (*extensions.Ingress, error) {
 	newIngress, err := r.Client.Ingress(env).Create(ingress)
 	if err != nil {
-		log.Debugf("Error: %s", err.Error())
 		if !apierrs.IsAlreadyExists(err) {
 			return nil, err
 		}
@@ -317,11 +313,11 @@ func (r *Deployer) CreateOrUpdateIngress(ingress *extensions.Ingress, env string
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("Ingress updated: %+v", ingress)
+		log.Infof("Ingress updated: %+v", ingress)
 		return ingress, nil
 
 	}
-	log.Debugf("Ingress created: %+v", ingress)
+	log.Infof("Ingress created: %+v", ingress)
 	return newIngress, nil
 }
 
