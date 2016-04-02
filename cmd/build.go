@@ -12,7 +12,7 @@ import (
 	"github.com/codeskyblue/go-sh"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/spf13/pflag"
-	kutil "k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/intstr"
 )
 
 // Builder encapsulates all of the parameters necessary for starting up
@@ -29,6 +29,7 @@ type Builder struct {
 	Type          string
 	Verbose       bool
 	Version       bool
+	Zone          string
 }
 
 // NewBuilder encapsulates all of the parameters necessary for starting up
@@ -47,6 +48,7 @@ func (b *Builder) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&b.Registry, "registry", b.Registry, "Docker registry e.g. [domain/][namespace]")
 	fs.BoolVar(&b.Verbose, "verbose", false, "Verbose")
 	fs.BoolVar(&b.Version, "version", false, "Print the version and exits")
+	fs.StringVar(&b.Zone, "dns-zone", b.Zone, "DNS zone to which to deploy services")
 }
 
 // Run runs the job
@@ -95,13 +97,13 @@ func (b *Builder) Run() error {
 	envVars := make(map[string]string)
 	envVars["PORT"] = "8080"
 	response, err := deployer.Run(&DeployRequest{
-		ContainerPort: kutil.NewIntOrStringFromInt(8080), // FIXME: hardcoding
-		Environment:   "default",                         // FIXME: hardcoding
+		ContainerPort: intstr.FromInt(8080), // FIXME: hardcoding
+		Environment:   "default",            // FIXME: hardcoding
 		EnvVars:       envVars,
 		Image:         image,
 		Replicas:      1,
 		ServiceID:     b.Repo,
-		Zone:          "connectapp.cloud", // FIXME: hardcoding
+		Zone:          b.Zone,
 	})
 	log.WithField("deploymentResponse", response)
 	if err != nil {

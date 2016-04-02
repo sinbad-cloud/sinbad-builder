@@ -9,15 +9,16 @@ import (
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/intstr"
+	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/watch"
 )
 
 const (
-	deploymentKey     string = "micros.atlassian.io/podTemplateHash"
 	k8sAPIVersion     string = "v1"
 	k8sBetaAPIVersion string = "extensions/v1beta1"
 )
@@ -29,16 +30,16 @@ type Deployer struct {
 
 // DeployRequest represents the request payload
 type DeployRequest struct {
-	Args          []string          `json:"arguments"`
-	ContainerPort util.IntOrString  `json:"containerPort"`
-	Environment   string            `json:"environment"`
-	EnvVars       map[string]string `json:"envVars"`
+	Args          []string           `json:"arguments"`
+	ContainerPort intstr.IntOrString `json:"containerPort"`
+	Environment   string             `json:"environment"`
+	EnvVars       map[string]string  `json:"envVars"`
 	Heartbeat     struct {
-		Path                         string           `json:"path"`
-		Port                         util.IntOrString `json:"port"`
-		InitialDelayLivenessSeconds  int64            `json:"initialDelayLivenessSeconds"`
-		InitialDelayReadinessSeconds int64            `json:"initialDelayReadinessSeconds"`
-		TimeoutSeconds               int64            `json:"timeoutSeconds"`
+		Path                         string             `json:"path"`
+		Port                         intstr.IntOrString `json:"port"`
+		InitialDelayLivenessSeconds  int                `json:"initialDelayLivenessSeconds"`
+		InitialDelayReadinessSeconds int                `json:"initialDelayReadinessSeconds"`
+		TimeoutSeconds               int                `json:"timeoutSeconds"`
 	} `json:"heartbeat"`
 	Image     string `json:"image"`
 	Replicas  int    `json:"replicas"`
@@ -62,7 +63,7 @@ func NewDeployer(host, token string, insecure bool) (*Deployer, error) {
 	var c *client.Client
 	var err error
 	if host != "" && token != "" {
-		config := &client.Config{
+		config := &restclient.Config{
 			Host:        host,
 			BearerToken: token,
 			Insecure:    insecure,
@@ -105,8 +106,16 @@ func (d *Deployer) Run(payload *DeployRequest) (*DeployResponse, error) {
 	}
 
 	// get deployment status
-	selector := labels.Everything().Add("name", labels.ExistsOperator, []string{payload.ServiceID})
-	watcher, err := d.Client.Deployments(payload.Environment).Watch(selector, fields.Everything(), deployment.ResourceVersion)
+	r, err := labels.NewRequirement("name", labels.ExistsOperator, sets.NewString(payload.ServiceID))
+	if err != nil {
+		return res, err
+	}
+	selector := labels.Everything().Add(*r)
+	watcher, err := d.Client.Deployments(payload.Environment).Watch(api.ListOptions{
+		LabelSelector:   selector,
+		FieldSelector:   fields.Everything(),
+		ResourceVersion: deployment.ResourceVersion,
+	})
 	if err != nil {
 		return res, err
 	}
@@ -191,7 +200,7 @@ func newService(payload *DeployRequest) *api.Service {
 		Spec: api.ServiceSpec{
 			Type: api.ServiceTypeNodePort,
 			Ports: []api.ServicePort{{
-				Port: payload.ContainerPort.IntVal,
+				Port: int(payload.ContainerPort.IntVal),
 			}},
 			Selector: map[string]string{"name": payload.ServiceID},
 		},
@@ -241,16 +250,15 @@ func newDeployment(payload *DeployRequest) *extensions.Deployment {
 		ObjectMeta: newMetadata(payload),
 		Spec: extensions.DeploymentSpec{
 			Replicas: payload.Replicas,
-			Selector: map[string]string{"name": payload.ServiceID},
+			Selector: &unversioned.LabelSelector{MatchLabels: map[string]string{"name": payload.ServiceID}},
 			Strategy: extensions.DeploymentStrategy{
 				Type: extensions.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &extensions.RollingUpdateDeployment{
-					MaxUnavailable:  util.NewIntOrStringFromString("10%"),
-					MaxSurge:        util.NewIntOrStringFromString("10%"),
-					MinReadySeconds: 15,
+					MaxUnavailable: intstr.FromString("10%"),
+					MaxSurge:       intstr.FromString("10%"),
 				},
 			},
-			Template: &api.PodTemplateSpec{
+			Template: api.PodTemplateSpec{
 				ObjectMeta: newMetadata(payload),
 				Spec: api.PodSpec{
 					// TODO: disable ServiceAccountName
@@ -261,7 +269,7 @@ func newDeployment(payload *DeployRequest) *extensions.Deployment {
 							Image: payload.Image,
 							Ports: []api.ContainerPort{{
 								Name:          "http",
-								ContainerPort: payload.ContainerPort.IntVal,
+								ContainerPort: int(payload.ContainerPort.IntVal),
 							}},
 							Env: envVars,
 							//LivenessProbe: newProbe(payload, payload.Heartbeat.InitialDelayLivenessSeconds),
@@ -281,13 +289,12 @@ func newDeployment(payload *DeployRequest) *extensions.Deployment {
 					RestartPolicy: "Always",
 				},
 			},
-			UniqueLabelKey: deploymentKey,
 		},
 		TypeMeta: unversioned.TypeMeta{APIVersion: k8sBetaAPIVersion, Kind: "Deployment"},
 	}
 }
 
-func newProbe(payload *DeployRequest, delay int64) *api.Probe {
+func newProbe(payload *DeployRequest, delay int) *api.Probe {
 	return &api.Probe{
 		Handler: api.Handler{HTTPGet: &api.HTTPGetAction{
 			Path: payload.Heartbeat.Path,
