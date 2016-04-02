@@ -21,6 +21,7 @@ type Builder struct {
 	Author        string
 	DockerMachine bool
 	Dir           string
+	LogJSON       bool
 	Namespace     string
 	Origin        string
 	Registry      string
@@ -42,8 +43,9 @@ func NewBuilder() *Builder {
 func (b *Builder) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&b.Dir, "dir", b.Dir, "Path of git repository")
 	fs.BoolVar(&b.DockerMachine, "docker-machine", b.DockerMachine, "Flag to use docker-machine client")
-	fs.StringVar(&b.Namespace, "namespace", b.Namespace, "Namespace")
-	fs.StringVar(&b.Origin, "origin", b.Origin, "Origin e.g. github.com")
+	fs.BoolVar(&b.LogJSON, "log-json", true, "Log as JSON")
+	fs.StringVar(&b.Namespace, "namespace", b.Namespace, "Git namespace (organisation or user)")
+	fs.StringVar(&b.Origin, "origin", b.Origin, "Git origin e.g. github.com")
 	fs.StringVar(&b.Repo, "repo", b.Repo, "Git repository")
 	fs.StringVar(&b.Registry, "registry", b.Registry, "Docker registry e.g. [domain/][namespace]")
 	fs.BoolVar(&b.Verbose, "verbose", false, "Verbose")
@@ -56,8 +58,11 @@ func (b *Builder) Run() error {
 	if b.Verbose {
 		log.SetLevel(log.DebugLevel)
 	}
+	if b.LogJSON {
+		log.SetFormatter(&log.JSONFormatter{})
+	}
 
-	// kubernetes clone the repo at the root of the volume so need to cd to the repo directory
+	// kubernetes clones the repo at the root of the volume so we need to cd to the repo directory
 	dir := path.Join(b.Dir, b.Repo)
 	session := sh.NewSession()
 	session.SetDir(dir)
