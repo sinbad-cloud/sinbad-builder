@@ -128,7 +128,6 @@ func (d *Deployer) Run(payload *DeployRequest) (*DeployResponse, error) {
 				log.Errorf("Error getting deployment: %+v", err)
 				return true
 			}
-			log.Debugf("Modified deployment: %+v", d)
 			if d.Status.Replicas == d.Spec.Replicas {
 				return true
 			}
@@ -154,7 +153,6 @@ func (r *Deployer) WatchLoop(w watch.Interface, fn func(watch.Event) bool) {
 				log.Info("No more events")
 				return
 			}
-			log.Debugf("Received event: %+v", event)
 			if stop := fn(event); stop {
 				w.Stop()
 			}
@@ -187,10 +185,10 @@ func (r *Deployer) CreateOrUpdateService(svc *api.Service, env string) (*api.Ser
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("Service updated: %+v", svc)
+		log.Infof("Service updated: %+v", svc)
 		return svc, nil
 	}
-	log.Debugf("Service created: %+v", svc)
+	log.Infof("Service created: %+v", svc)
 	return newsSvc, nil
 }
 
@@ -219,7 +217,7 @@ func newMetadata(payload *DeployRequest) api.ObjectMeta {
 
 // CreateOrUpdateDeployment creates or updates a service
 func (r *Deployer) CreateOrUpdateDeployment(d *extensions.Deployment, env string) (*extensions.Deployment, error) {
-	log.WithField("image", d.Spec.Template.Spec.Containers[0].Image).Debug("New deployment")
+	log.WithField("image", d.Spec.Template.Spec.Containers[0].Image).Info("Deployment")
 
 	newD, err := r.Client.Deployments(env).Create(d)
 	if err != nil {
