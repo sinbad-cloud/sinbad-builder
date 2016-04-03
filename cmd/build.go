@@ -71,7 +71,8 @@ func (b *Builder) Run() error {
 	if err != nil {
 		return err
 	}
-	image := fmt.Sprintf("%s/%s:%s", b.Registry, b.Repo, tag)
+	// e.g. b.gcr.io/jerome-1209/bitbucket.org/jtblin/kigo-hooker
+	image := fmt.Sprintf("%s/%s/%s/%s:%s", b.Registry, b.Origin, b.Namespace, b.Repo, tag)
 
 	var client *docker.Client
 	if b.DockerMachine {
@@ -91,7 +92,7 @@ func (b *Builder) Run() error {
 	if err != nil {
 		return err
 	}
-	if err = push(image, client, authConfigs.Configs["docker.atlassian.io"]); err != nil {
+	if err = push(image, client, authConfigs.Configs[b.Registry]); err != nil {
 		return err
 	}
 	// TODO: create a job and use different service to deploy
@@ -100,6 +101,7 @@ func (b *Builder) Run() error {
 		return err
 	}
 	envVars := make(map[string]string)
+	// FIXME: hardcoding
 	envVars["PORT"] = "8080"
 	response, err := deployer.Run(&DeployRequest{
 		ContainerPort: intstr.FromInt(8080), // FIXME: hardcoding
@@ -129,7 +131,6 @@ func shortHash(s *sh.Session) (string, error) {
 
 func build(src, name string, client *docker.Client) error {
 	dockerfile := path.Join(src, "Dockerfile")
-	var exist bool
 
 	w := log.StandardLogger().Writer()
 	defer w.Close()
@@ -140,6 +141,7 @@ func build(src, name string, client *docker.Client) error {
 		OutputStream: w,
 	}
 
+	var exist bool
 	if _, err := os.Stat(dockerfile); err == nil {
 		exist = true
 		log.WithFields(log.Fields{"image": name}).Info(fmt.Sprintf("Found existing Dockerfile"))
