@@ -71,7 +71,7 @@ func (b *Builder) Run() error {
 	if err != nil {
 		return err
 	}
-	// e.g. b.gcr.io/jerome-1209/bitbucket.org/jtblin/kigo-hooker
+	// e.g. b.gcr.io/project/github.com/sinbad-cloud/sinbad-hooker
 	image := fmt.Sprintf("%s/%s/%s/%s:%s", b.Registry, b.Origin, b.Namespace, b.Repo, tag)
 
 	var client *docker.Client

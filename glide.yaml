@@ -1,4 +1,4 @@
-package: bitbucket.org/jtblin/kigo-builder
+package: github.com/sinbad-cloud/sinbad-builder
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/codeskyblue/go-sh

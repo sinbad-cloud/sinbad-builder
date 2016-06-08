@@ -3,11 +3,11 @@ package main
 import (
 	"runtime"
 
-	"bitbucket.org/jtblin/kigo-builder/cmd"
-	"bitbucket.org/jtblin/kigo-builder/version"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/spf13/pflag"
+
+	"github.com/sinbad-cloud/sinbad-builder/cmd"
+	"github.com/sinbad-cloud/sinbad-builder/version"
 )
 
 func main() {

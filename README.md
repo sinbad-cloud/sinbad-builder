@@ -1,4 +1,4 @@
-# kigo-builder
+# sinbad-builder
 
 Build docker containers herokuish style
 
@@ -10,14 +10,14 @@ Start an app
 
 Run locally (OSX)
 
-    ./build/bin/kigo-builder --namespace=jtblin --repo=node-hello --origin=github.com --verbose \
+    ./build/bin/sinbad-builder --namespace=jtblin --repo=node-hello --origin=github.com --verbose \
     	--dir=/Users/jtblin/src/private/node-hello/ --registry=jtblin --docker-machine
 
 Run inside a docker container
 
     make docker
     docker run --rm -it -v/Users/jtblin/src/private/node-hello:/src -v /var/run/docker.sock:/var/run/docker.sock \
-    	-v /Users/jtblin/.docker/config.json:/root/.docker/config.json kigo-builder:<replaceme> \
+    	-v /Users/jtblin/.docker/config.json:/root/.docker/config.json sinbad-builder:<replaceme> \
     	--namespace=jtblin --repo=node-hello --origin=github.com --verbose --registry=jtblin --dir=/src
 
 ## Repos for testing

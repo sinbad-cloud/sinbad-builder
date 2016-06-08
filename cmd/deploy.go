@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	log "github.com/Sirupsen/logrus"
-
 	"fmt"
 
+	log "github.com/Sirupsen/logrus"
 	"k8s.io/kubernetes/pkg/api"
 	apierrs "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/unversioned"
